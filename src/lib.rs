@@ -52,6 +52,7 @@ pub struct Client {
     password: Option<String>,
     compression: Compression,
     options: HashMap<String, String>,
+    headers: HashMap<String, String>,
 }
 
 impl Default for Client {
@@ -73,6 +74,7 @@ impl Default for Client {
             password: None,
             compression: Compression::default(),
             options: HashMap::new(),
+            headers: HashMap::new(),
         }
     }
 }
@@ -111,6 +113,11 @@ impl Client {
 
     pub fn with_option(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.options.insert(name.into(), value.into());
+        self
+    }
+
+    pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(name.into(), value.into());
         self
     }
 

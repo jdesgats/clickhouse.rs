@@ -56,6 +56,10 @@ impl<T> Insert<T> {
             builder = builder.header("X-ClickHouse-Key", password);
         }
 
+        for (name, value) in &client.headers {
+            builder = builder.header(name, value);
+        }
+
         let (sender, body) = Body::channel();
 
         let request = builder

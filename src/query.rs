@@ -132,6 +132,10 @@ impl Query {
             builder = builder.header("X-ClickHouse-Key", password);
         }
 
+        for (name, value) in &self.client.headers {
+            builder = builder.header(name, value);
+        }
+
         if let Some(encoding) = self.client.compression.encoding() {
             builder = builder.header(ACCEPT_ENCODING, encoding);
         }
