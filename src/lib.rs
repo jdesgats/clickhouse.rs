@@ -6,11 +6,16 @@ extern crate static_assertions;
 
 use std::{collections::HashMap, time::Duration};
 
+use hyper::{Body, Request};
+use hyper::client::ResponseFuture;
 use hyper::client::connect::HttpConnector;
 
 pub use clickhouse_derive::Row;
+#[cfg(feature = "tls")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
+use hyper_tls::HttpsConnector;
 
-use self::error::Result;
+use self::error::{Error, Result};
 pub use self::{compression::Compression, row::Row};
 
 pub mod error;
@@ -44,7 +49,9 @@ const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 pub struct Client {
-    client: hyper::Client<HttpConnector>,
+    plaintext_client: hyper::Client<HttpConnector>,
+    #[cfg(feature = "tls")]
+    tls_client: hyper::Client<HttpsConnector<HttpConnector>>,
 
     url: String,
     database: Option<String>,
@@ -57,17 +64,24 @@ pub struct Client {
 
 impl Default for Client {
     fn default() -> Self {
-        let mut connector = HttpConnector::new();
-
+        let mut plaintext_connector = HttpConnector::new();
         // TODO: make configurable in `Client::builder()`.
-        connector.set_keepalive(Some(TCP_KEEPALIVE));
+        plaintext_connector.set_keepalive(Some(TCP_KEEPALIVE));
+        plaintext_connector.enforce_http(false);
 
-        let client = hyper::Client::builder()
+        let plaintext_client = hyper::Client::builder()
             .pool_idle_timeout(POOL_IDLE_TIMEOUT)
-            .build(connector);
+            .build(plaintext_connector.clone());
 
         Self {
-            client,
+            plaintext_client,
+            #[cfg(feature = "tls")]
+            tls_client: {
+                let tls_connector = HttpsConnector::new_with_connector(plaintext_connector);
+                hyper::Client::builder()
+                    .pool_idle_timeout(POOL_IDLE_TIMEOUT)
+                    .build(tls_connector)
+            },
             url: String::new(),
             database: None,
             user: None,
@@ -135,6 +149,15 @@ impl Client {
 
     pub fn query(&self, query: &str) -> query::Query {
         query::Query::new(self, query)
+    }
+
+    fn request(&self, req: Request<Body>) -> Result<ResponseFuture> {
+        match req.uri().scheme_str() {
+            Some("http") => Ok(self.plaintext_client.request(req)),
+            #[cfg(feature = "tls")]
+            Some("https") => Ok(self.tls_client.request(req)),
+            scheme => Err(Error::UnsupportedScheme(scheme.map(|x| x.to_owned()))),
+        }
     }
 
     #[cfg(feature = "watch")]

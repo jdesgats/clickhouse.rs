@@ -29,6 +29,8 @@ pub enum Error {
     Custom(String),
     #[error("bad response: {0}")]
     BadResponse(String),
+    #[error("unsupported scheme: {0:?}")]
+    UnsupportedScheme(Option<String>),
 
     // Internally handled errors, not part of public API.
     // XXX: move to another error?
